@@ -93,6 +93,7 @@ function App() {
           event.candidate,
           incomingCall?.callId
         );
+        setIncomingCall(null);
       }
     };
 
@@ -366,7 +367,6 @@ function App() {
               <button
                 onClick={() => {
                   acceptCall();
-                  setIncomingCall(null);
                 }}
                 className="flex-1 px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
               >
