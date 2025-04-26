@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as signalR from "@microsoft/signalr";
 
 interface IUser {
@@ -27,7 +27,11 @@ function App() {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [currentCallUser, setCurrentCallUser] = useState<string>();
   const [localStream, setLocalStream] = useState<MediaStream>();
-  const [incomingCall, setIncomingCall] = useState<ICall | null>(null);
+  const [incomingCall, setIncomingCall] = useState<ICall>();
+  // Заменяем состояние callId на useRef
+  const callIdRef = useRef<string>();
+
+  const [callId, setCallId] = useState<string>();
 
   // WebRTC variables
   // let peerConnection: RTCPeerConnection | null = null;
@@ -67,13 +71,29 @@ function App() {
     };
   }, []);
 
+  // Функция для создания нового RTCPeerConnection
+  const createNewPeerConnection = () => {
+    // Закрываем предыдущее соединение, если оно существует
+    if (peerConnection) {
+      peerConnection.close();
+    }
+
+    // Создаем новое соединение
+    const newPeerConnection = new RTCPeerConnection({ iceServers });
+    setPeerConnection(newPeerConnection);
+    return newPeerConnection;
+  };
+
   const callUser = async (username: string) => {
     try {
+      // Создаем новое соединение для каждого звонка
+      const newPeerConnection = createNewPeerConnection();
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
 
       stream.getTracks().forEach((track) => {
-        peerConnection?.addTrack(track, stream);
+        newPeerConnection.addTrack(track, stream);
       });
 
       connection?.invoke("CallUser", username);
@@ -84,16 +104,23 @@ function App() {
   };
 
   useEffect(() => {
+    console.log("incomingCall: ", incomingCall);
+  }, [incomingCall]);
+
+  useEffect(() => {
     if (!connection || !peerConnection) return;
 
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
+        // Используем callIdRef.current вместо callId
         connection.invoke(
           "SendIceCandidate",
           event.candidate,
-          incomingCall?.callId
+          callIdRef.current
         );
-        setIncomingCall(null);
+        console.log(username, callIdRef.current);
+        // Не нужно сбрасывать incomingCall здесь
+        // setIncomingCall(undefined);
       }
     };
 
@@ -109,6 +136,9 @@ function App() {
 
     connection.on("CallingUser", (call: ICall) => {
       setIncomingCall(call);
+      // Сохраняем callId в ref
+      callIdRef.current = call.callId;
+      console.log("Incoming call with ID:", call.callId);
     });
 
     connection.on("CreatedUser", (user: IUser) => {
@@ -166,6 +196,7 @@ function App() {
           new RTCSessionDescription(response.answer)
         );
         setIsInVoice(true);
+        // setCallId(response.call.callId);
       }
     );
 
@@ -179,13 +210,16 @@ function App() {
     });
 
     connection.on("DeclinedCall", (call: ICall) => {
-      setIncomingCall(null);
+      setIncomingCall(undefined);
     });
 
     connection.on("AcceptedCall", async (call: ICall) => {
       setIsInVoice(true);
       try {
-        setCurrentCallUser(call.from.userName);
+        // Создаем новое соединение при принятии звонка
+        const newPeerConnection = createNewPeerConnection();
+
+        setCurrentCallUser(call.to.userName);
         // Получаем доступ к микрофону при входящем звонке
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
@@ -194,12 +228,16 @@ function App() {
 
         // Добавляем треки в peer connection
         stream.getTracks().forEach((track) => {
-          peerConnection?.addTrack(track, stream);
+          newPeerConnection.addTrack(track, stream);
         });
 
-        const offer = await peerConnection!.createOffer();
-        await peerConnection!.setLocalDescription(offer);
+        const offer = await newPeerConnection.createOffer();
+        await newPeerConnection.setLocalDescription(offer);
         connection.invoke("SendOffer", offer, call.callId);
+        console.log(call);
+        // Сохраняем callId в ref
+        callIdRef.current = call.callId;
+        console.log("AcceptedCall with ID:", call.callId);
       } catch (error) {
         console.error("Ошибка при получении звонка:", error);
       }
@@ -244,6 +282,14 @@ function App() {
         localStream.getTracks().forEach((track) => track.stop());
         setLocalStream(undefined);
       }
+
+      // Закрываем текущее соединение
+      if (peerConnection) {
+        peerConnection.close();
+        // Создаем новое соединение
+        setPeerConnection(new RTCPeerConnection({ iceServers }));
+      }
+
       setIsInVoice(false);
       setSelectedUser(null);
       connection?.invoke("GetAllUsers");
@@ -266,8 +312,16 @@ function App() {
     connection?.invoke("DeclineCall", incomingCall?.callId);
   };
   const acceptCall = () => {
-    connection?.invoke("AcceptCall", incomingCall?.callId);
-    setIsInVoice(true);
+    if (incomingCall) {
+      // Сохраняем callId в ref перед сбросом incomingCall
+      callIdRef.current = incomingCall.callId;
+      console.log("Accepting call with ID:", callIdRef.current);
+
+      connection?.invoke("AcceptCall", incomingCall.callId);
+      setCurrentCallUser(incomingCall.from.userName);
+      setIsInVoice(true);
+      setIncomingCall(undefined);
+    }
   };
 
   if (!isLoggedIn) {
@@ -341,7 +395,6 @@ function App() {
               <button
                 onClick={() => {
                   declineCall();
-                  setIncomingCall(null);
                 }}
                 className="flex-1 px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
               >
