@@ -29,9 +29,7 @@ function App() {
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [incomingCall, setIncomingCall] = useState<ICall>();
   // Заменяем состояние callId на useRef
-  const callIdRef = useRef<string>();
-
-  const [callId, setCallId] = useState<string>();
+  const callIdRef = useRef<string | undefined>(undefined);
 
   // WebRTC variables
   // let peerConnection: RTCPeerConnection | null = null;
@@ -211,6 +209,7 @@ function App() {
 
     connection.on("DeclinedCall", (call: ICall) => {
       setIncomingCall(undefined);
+      console.log(call);
     });
 
     connection.on("AcceptedCall", async (call: ICall) => {

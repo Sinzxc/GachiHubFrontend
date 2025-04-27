@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Mount SSL certificates from host
+      - ./ssl:/etc/nginx/ssl
+      # For development: uncomment to mount dist folder directly
+      # - ./dist:/usr/share/nginx/html
+    restart: unless-stopped
