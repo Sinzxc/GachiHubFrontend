@@ -30,6 +30,8 @@ function App() {
   const [incomingCall, setIncomingCall] = useState<ICall>();
   // Заменяем состояние callId на useRef
   const callIdRef = useRef<string | undefined>(undefined);
+  // Добавляем ref для рингтона
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
 
   // WebRTC variables
   // let peerConnection: RTCPeerConnection | null = null;
@@ -48,6 +50,21 @@ function App() {
     //   credential: "openrelayproject",
     // },
   ];
+
+  // Инициализируем рингтон при загрузке компонента
+  useEffect(() => {
+    // Создаем аудио-элемент для рингтона
+    ringtoneRef.current = new Audio("/ringtone.mp3");
+    ringtoneRef.current.loop = true; // Зацикливаем рингтон
+
+    return () => {
+      // Останавливаем рингтон при размонтировании компонента
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const signalRServerUrl = import.meta.env.VITE_SIGNALR_SERVER;
@@ -142,6 +159,13 @@ function App() {
       // Сохраняем callId в ref
       callIdRef.current = call.callId;
       console.log("Incoming call with ID:", call.callId);
+
+      // Воспроизводим рингтон при входящем звонке
+      if (ringtoneRef.current) {
+        ringtoneRef.current.play().catch((err) => {
+          console.error("Ошибка воспроизведения рингтона:", err);
+        });
+      }
     });
 
     connection.on("CreatedUser", (user: IUser) => {
@@ -235,6 +259,12 @@ function App() {
     });
 
     connection.on("DeclinedCall", (call: ICall) => {
+      // Останавливаем рингтон
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+
       setIncomingCall(undefined);
       console.log(call);
     });
@@ -341,11 +371,24 @@ function App() {
   };
 
   const declineCall = () => {
+    // Останавливаем рингтон
+    if (ringtoneRef.current) {
+      ringtoneRef.current.pause();
+      ringtoneRef.current.currentTime = 0;
+    }
+
     connection?.invoke("DeclineCall", incomingCall?.callId);
     setIncomingCall(undefined);
   };
+
   const acceptCall = () => {
     if (incomingCall) {
+      // Останавливаем рингтон
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+
       // Сохраняем callId в ref перед сбросом incomingCall
       callIdRef.current = incomingCall.callId;
       console.log("Accepting call with ID:", callIdRef.current);
