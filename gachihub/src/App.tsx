@@ -176,6 +176,28 @@ function App() {
       "ReceiveOffer",
       async (response: { offer: any; call: ICall }) => {
         if (!peerConnection) return;
+
+        // Сохраняем callId в ref
+        callIdRef.current = response.call.callId;
+        console.log("Получен offer, callId:", callIdRef.current);
+
+        // Если еще нет локального потока, получаем его
+        if (!localStream) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+            });
+            setLocalStream(stream);
+
+            // Добавляем треки в peer connection
+            stream.getTracks().forEach((track) => {
+              peerConnection.addTrack(track, stream);
+            });
+          } catch (error) {
+            console.error("Ошибка при получении доступа к микрофону:", error);
+          }
+        }
+
         await peerConnection.setRemoteDescription(
           new RTCSessionDescription(response.offer)
         );
@@ -305,6 +327,7 @@ function App() {
   const handleLogin = () => {
     console.log("created user: ", username);
     connection?.invoke("CreateUser", username.trim());
+    connection?.invoke("GetAllUsers");
     setIsLoggedIn(true);
   };
 
@@ -314,6 +337,7 @@ function App() {
 
   const declineCall = () => {
     connection?.invoke("DeclineCall", incomingCall?.callId);
+    setIncomingCall(undefined);
   };
   const acceptCall = () => {
     if (incomingCall) {
@@ -325,6 +349,25 @@ function App() {
       setCurrentCallUser(incomingCall.from.userName);
       setIsInVoice(true);
       setIncomingCall(undefined);
+
+      // Сразу получаем доступ к микрофону при принятии звонка
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          setLocalStream(stream);
+          // Добавляем треки в peer connection, если оно существует
+          if (peerConnection) {
+            stream.getTracks().forEach((track) => {
+              peerConnection.addTrack(track, stream);
+            });
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Ошибка доступа к микрофону при принятии звонка:",
+            error
+          );
+        });
     }
   };
 
@@ -376,7 +419,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-      {incomingCall && (
+      {incomingCall != undefined && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <div className="text-center mb-4">
