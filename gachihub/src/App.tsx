@@ -243,6 +243,10 @@ function App() {
       }
     });
 
+    connection.on("EndedCall", () => {
+      stopStreaming();
+    });
+
     return () => {
       connection.off("CreatedUser");
       connection.off("ReceiveCall");
@@ -254,6 +258,7 @@ function App() {
       connection.off("UserDisconnected");
       connection.off("DeclinedCall");
       connection.off("AcceptedCall");
+      connection.off("EndCall");
     };
   }, [connection, peerConnection]);
 
@@ -623,7 +628,10 @@ function App() {
             </button>
           ) : (
             <button
-              onClick={stopStreaming}
+              onClick={() => {
+                connection?.invoke("EndCall", callIdRef.current);
+                stopStreaming();
+              }}
               className="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
             >
               End Call
