@@ -36,7 +36,12 @@ function App() {
 
   // ICE servers for NAT traversal
   const iceServers = [
-    { urls: "stun:stun.l.google.com:19302" },
+    // { urls: "stun:stun.l.google.com:19302" },
+    {
+      urls: import.meta.env.VITE_TURN_SERVER_IP,
+      username: import.meta.env.VITE_TURN_SERVER_USERNAME,
+      credential: import.meta.env.VITE_TURN_SERVER_CREDENTIAL,
+    },
     // {
     //   urls: "turn:openrelay.metered.ca:80",
     //   username: "openrelayproject",
